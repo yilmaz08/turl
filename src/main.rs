@@ -33,7 +33,7 @@ fn print_content(content: Vec<u8>, lossy: bool) {
     }
     match String::from_utf8(content) {
         Ok(s) => println!("{}", s),
-        Err(_e) => println!("Content is not valid UTF-8. Use --force to print it anyways or save it to a file.")
+        Err(_e) => println!("Content is not valid UTF-8. Use --force to print it anyway or save it to a file.")
     }
 }
 
