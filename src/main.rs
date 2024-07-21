@@ -7,16 +7,12 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
-    #[arg(help = "Target IP/Domain", short, long, default_value = "127.0.0.1")]
+    #[arg(help = "Target IP/Domain")]
     target: String,
-    #[arg(help = "Target Port", short, long, default_value = "80")]
-    port: u16,
     #[arg(help = "Content", short, long)]
     content: String,
     #[arg(help = "Output File", short, long)]
     output: Option<String>,
-    #[arg(help = "Lossy UTF-8 Conversion", long)]
-    lossy: bool,
     #[arg(help = "Force", short, long)]
     force: bool,
 }
@@ -37,7 +33,7 @@ fn print_content(content: Vec<u8>, lossy: bool) {
     }
     match String::from_utf8(content) {
         Ok(s) => println!("{}", s),
-        Err(_e) => println!("Content is not valid UTF-8. Use --lossy to print it anyways or save it to a file.")
+        Err(_e) => println!("Content is not valid UTF-8. Use --force to print it anyways or save it to a file.")
     }
 }
 
@@ -66,7 +62,7 @@ fn main() -> std::io::Result<()> {
     let normalized_content = normalize_text(args.content.clone());
     
     // Connect
-    let mut stream = match TcpStream::connect(format!("{}:{}", args.target, args.port)) {
+    let mut stream = match TcpStream::connect(args.target) {
         Ok(stream) => stream,
         Err(e) => {
             if e.kind() == std::io::ErrorKind::ConnectionRefused {
@@ -91,7 +87,7 @@ fn main() -> std::io::Result<()> {
 
     // Print content
     if !args.output.is_some() {
-        print_content(content, args.lossy);
+        print_content(content, args.force);
         return Ok(());
     }
 
