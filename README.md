@@ -11,6 +11,10 @@ $ cargo run -- 127.0.0.1:80 --content "GET / HTTP/1.1\r\nHost: 127.0.0.1:80\r\n\
 ```
 This will send a HTTP request to 127.0.0.1:80 with the specified headers and content.
 
+> You can use --content-file to enter a file path for request content to read from.
+
+> Alternatively, if you don't provide --content or --content-file, you will be prompted to enter multi-line text directly which will be the request content.
+
 Response (on a nginx welcome page):
 ```
 HTTP/1.1 200 OK
