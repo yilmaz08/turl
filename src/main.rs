@@ -19,12 +19,22 @@ struct Args {
     #[arg(help = "Request Content File", long)]
     content_file: Option<String>,
 
+    #[arg(help = "HTTP Method (a http request is formed and content data is used as http body)", long)]
+    http: Option<String>,
+
     // Output
     #[arg(help = "Output File", short, long)]
     output: Option<String>,
+
+    // Boolean Flags
     #[arg(help = "Force", short, long)]
     force: bool,
+    #[arg(help = "Debug", short, long)]
+    debug: bool
 }
+
+// Static Variables
+static HTTP_METHODS: [&str; 9] = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "CONNECT", "TRACE"];
 
 // Printing
 fn print_response(response: Vec<u8>, lossy: bool) {
@@ -75,7 +85,6 @@ fn get_content(args: Args) -> String {
     return input;
 }
 
-
 fn save_response_to_file(response: Vec<u8>, file_path: String, force: bool) -> std::io::Result<()> {
     if !std::path::Path::new(&file_path).exists() {
         file_functions::write_to_file(response, file_path.clone(), true)?;
@@ -105,13 +114,39 @@ fn save_response_to_file(response: Vec<u8>, file_path: String, force: bool) -> s
     return Ok(());
 }
 
+fn parse_http_path(addr: String) -> String {
+    // TODO: Create a parser
+    return "/".to_string(); // Temporary solution
+}
+
+fn http_method_validity_check(method: String, force: bool) -> bool {
+    if force { return true; } // Force flag is set, ignore check
+    return HTTP_METHODS.contains(&method.to_uppercase().as_str());
+}
+
 fn main() -> std::io::Result<()> {
     // Parse Arguments
     let args = Args::parse();
     
     // Get Request
-    let request = get_content(args.clone());
-    
+    let mut request = get_content(args.clone());
+
+    // HTTP Mode
+    if args.http.is_some() {
+        if !http_method_validity_check(args.http.clone().unwrap(), args.force) {
+            println!("Error: Invalid HTTP Method, use a valid HTTP method or use --force to ignore this check");
+            std::process::exit(1);
+        }
+
+        let request_line = format!("{} {} {}\r\n", args.http.unwrap().to_uppercase(), parse_http_path(args.addr.clone()), "HTTP/1.1".to_string());
+        let mut headers = String::new();
+
+        headers.push_str(&format!("Host: {}\r\n", args.addr));
+        headers.push_str(&format!("Content-Length: {}\r\n", request.len()));
+
+        request = format!("{}{}\r\n{}", request_line, headers, request);
+    }
+
     // Connect
     let mut stream = match TcpStream::connect(args.addr) {
         Ok(stream) => stream,
@@ -120,6 +155,10 @@ fn main() -> std::io::Result<()> {
             std::process::exit(1);
         }
     };
+
+    if args.debug {
+        println!("--- REQUEST ---\n{}", request);
+    }
 
     // Request and shutdown write
     stream.write_all(request.as_bytes())?;
@@ -131,6 +170,9 @@ fn main() -> std::io::Result<()> {
 
     // Print response
     if !args.output.is_some() {
+        if args.debug {
+            println!("--- RESPONSE ---");
+        }
         print_response(response, args.force);
         return Ok(());
     }
