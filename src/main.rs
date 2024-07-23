@@ -114,9 +114,40 @@ fn save_response_to_file(response: Vec<u8>, file_path: String, force: bool) -> s
     return Ok(());
 }
 
-fn parse_http_path(addr: String) -> String {
-    // TODO: Create a parser
-    return "/".to_string(); // Temporary solution
+// Return: Protocol, Address, Path
+fn address_parser(addr: String, debug: bool) -> (Option<String>, String, String) {
+    // TODO: When port is not provided, use default port for the protocol
+    let splitted: Vec<&str> = addr.split("://").collect();
+
+    let protocol = match splitted.len() {
+        1 => None,
+        2 => Some(splitted[0].to_string().to_lowercase()),
+        _ => {
+            println!("Error: Couldn't parse address: {}", addr);
+            std::process::exit(1);
+        }
+    };
+
+    let addr_and_path = splitted[splitted.len()-1].to_string();
+
+    let splitted_addr: Vec<&str> = addr_and_path.split("/").collect();
+
+    let address = splitted_addr[0].to_string();
+    let path = match splitted_addr.len() {
+        1 => "/".to_string(),
+        2 => format!("/{}", splitted_addr[1]),
+        _ => {
+            let mut path = String::new();
+            for i in 1..splitted_addr.len() {
+                path.push_str(&format!("/{}", splitted_addr[i]));
+            }
+            path
+        }
+    };
+    
+    if debug { println!("--- PARSED ADDRESS ---\nProtocol: {:?}\nAddress: {:?}\nPath: {:?}", protocol, address, path); }
+
+    return (protocol, address, path);
 }
 
 fn http_method_validity_check(method: String, force: bool) -> bool {
@@ -128,6 +159,9 @@ fn main() -> std::io::Result<()> {
     // Parse Arguments
     let args = Args::parse();
     
+    let (protocol, address, path) = address_parser(args.addr.clone(), args.debug);
+    // protocol is not used for now
+
     // Get Request
     let mut request = get_content(args.clone());
 
@@ -138,17 +172,22 @@ fn main() -> std::io::Result<()> {
             std::process::exit(1);
         }
 
-        let request_line = format!("{} {} {}\r\n", args.http.unwrap().to_uppercase(), parse_http_path(args.addr.clone()), "HTTP/1.1".to_string());
+        // let request_line = format!("{} {} {}\r\n", args.http.unwrap().to_uppercase(), parse_http_path(args.addr.clone()), "HTTP/1.1".to_string());
+        let request_line = format!("{} {} {}\r\n", args.http.unwrap().to_uppercase(), path, "HTTP/1.1".to_string());
         let mut headers = String::new();
 
-        headers.push_str(&format!("Host: {}\r\n", args.addr));
+        headers.push_str(&format!("Host: {}\r\n", address));
+        headers.push_str("User-Agent: turl\r\n");
+        headers.push_str("Accept: */*\r\n");
+        
         headers.push_str(&format!("Content-Length: {}\r\n", request.len()));
+
 
         request = format!("{}{}\r\n{}", request_line, headers, request);
     }
 
     // Connect
-    let mut stream = match TcpStream::connect(args.addr) {
+    let mut stream = match TcpStream::connect(address) {
         Ok(stream) => stream,
         Err(e) => {
             print_connection_error(e);
