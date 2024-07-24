@@ -1,6 +1,7 @@
 use std::{
     io::{Read, Write},
-    net::TcpStream
+    net::TcpStream,
+    time::Duration
 };
 use clap::Parser;
 
@@ -25,6 +26,10 @@ struct Args {
     // Output
     #[arg(help = "Output File", short, long)]
     output: Option<String>,
+
+    // Timeout
+    #[arg(help = "Timeout (in seconds) default=5", short, long, default_value = "5")]
+    timeout: u64,
 
     // Boolean Flags
     #[arg(help = "Force", short, long)]
@@ -80,7 +85,7 @@ fn get_content(args: Args) -> String {
     }
 
     // Multi-line input
-    println!("Enter Request Content (Ctrl+D to finish):");
+    println!("-> Enter Request Content (Ctrl+D to finish):");
     let input = input_functions::get_multiline_input();
     return input;
 }
@@ -179,6 +184,7 @@ fn main() -> std::io::Result<()> {
         headers.push_str(&format!("Host: {}\r\n", address));
         headers.push_str("User-Agent: turl\r\n");
         headers.push_str("Accept: */*\r\n");
+        headers.push_str("Connection: close\r\n");
         
         headers.push_str(&format!("Content-Length: {}\r\n", request.len()));
 
@@ -199,19 +205,31 @@ fn main() -> std::io::Result<()> {
         println!("--- REQUEST ---\n{}", request);
     }
 
-    // Request and shutdown write
-    stream.write_all(request.as_bytes())?;
-    stream.shutdown(std::net::Shutdown::Write)?;
+    // Set Read Timeout
+    stream.set_read_timeout(Some(Duration::from_secs(args.timeout)))?;
 
-    // Read response
+    // Request
+    stream.write_all(request.as_bytes())?;
+    
+    // Read Response
     let mut response = Vec::<u8>::new();
-    stream.read_to_end(&mut response)?;
+
+    let mut buffer = [0; 512];
+    loop {
+        match stream.read(&mut buffer) {
+            Ok(0) => break, // Connection closed by server
+            Ok(n) => response.extend_from_slice(&buffer[..n]),
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                if args.debug { println!("-> Timed Out"); }
+                break;
+            }, // Timeout
+            Err(e) => return Err(e), // Another error occurred
+        }
+    }
 
     // Print response
     if !args.output.is_some() {
-        if args.debug {
-            println!("--- RESPONSE ---");
-        }
+        if args.debug { println!("--- RESPONSE ---"); }
         print_response(response, args.force);
         return Ok(());
     }
