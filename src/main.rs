@@ -20,8 +20,12 @@ struct Args {
     #[arg(help = "Request Content File", long)]
     content_file: Option<String>,
 
+    // HTTP Mode
     #[arg(help = "HTTP Method (a http request is formed and content data is used as http body)", long)]
     http: Option<String>,
+    #[arg(help = "Hide HTTP Response Headers", long)]
+    hide_http_headers: bool,
+
 
     // Output
     #[arg(help = "Output File", short, long)]
@@ -173,12 +177,12 @@ fn main() -> std::io::Result<()> {
     // HTTP Mode
     if args.http.is_some() {
         if !http_method_validity_check(args.http.clone().unwrap(), args.force) {
-            println!("Error: Invalid HTTP Method, use a valid HTTP method or use --force to ignore this check");
+            println!("Invalid HTTP Method, use a valid HTTP method or use --force to ignore this check");
             std::process::exit(1);
         }
 
         // let request_line = format!("{} {} {}\r\n", args.http.unwrap().to_uppercase(), parse_http_path(args.addr.clone()), "HTTP/1.1".to_string());
-        let request_line = format!("{} {} {}\r\n", args.http.unwrap().to_uppercase(), path, "HTTP/1.1".to_string());
+        let request_line = format!("{} {} {}\r\n", args.http.clone().unwrap().to_uppercase(), path, "HTTP/1.1".to_string());
         let mut headers = String::new();
 
         headers.push_str(&format!("Host: {}\r\n", address));
@@ -206,7 +210,12 @@ fn main() -> std::io::Result<()> {
     }
 
     // Set Read Timeout
-    stream.set_read_timeout(Some(Duration::from_secs(args.timeout)))?;
+    if args.timeout > 0 {
+        stream.set_read_timeout(Some(Duration::new(args.timeout, 0)))?;
+    } else if !args.force {
+        println!("Timeout is not set, this may cause turl to hang indefinitely. Use --force to ignore this check.");
+        std::process::exit(1);
+    }
 
     // Request
     stream.write_all(request.as_bytes())?;
@@ -225,6 +234,31 @@ fn main() -> std::io::Result<()> {
             }, // Timeout
             Err(e) => return Err(e), // Another error occurred
         }
+    }
+
+    // Hide HTTP Headers
+    if args.hide_http_headers {
+        // split at carriage returns
+        let mut splitted = response.split(|&x| x == '\r' as u8);
+        
+        let mut body = Vec::<u8>::new();
+        let mut on_body = false;
+        for i in splitted {
+            if on_body {
+                body.extend_from_slice(i);
+                continue;
+            }
+            if i == "\n".as_bytes() {
+                on_body = true;
+            }
+        }
+
+        if body.len() == 0 {
+            println!("Error: Couldn't parse HTTP response");
+            std::process::exit(1);
+        }
+
+        response = body[1..].to_vec(); // used 1.. to remove \n
     }
 
     // Print response
