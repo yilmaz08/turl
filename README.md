@@ -1,7 +1,7 @@
 # tURL
-tURL is a [curl](https://github.com/curl/curl) inspired command-line tool to make plain TCP requests.
+tURL is a [curl](https://github.com/curl/curl) inspired command-line tool to make plain TCP-based requests.
 ## Installation
-Currently, there are no releases. However, you can still clone the repository and use it.
+You can clone the repository and use it.
 ```
 git clone https://github.com/yilmaz08/turl
 ```
@@ -13,7 +13,7 @@ This will send a HTTP request to 127.0.0.1:80 with the specified headers and con
 
 Alternatively, you can use the recently introduced `HTTP Mode`:
 ```
-$ cargo run -- 127.0.0.1:80 --content "body here" --http GET
+$ cargo run -- 127.0.0.1:80 --content "request body" --http GET
 ```
 
 Response (on a nginx welcome page):
